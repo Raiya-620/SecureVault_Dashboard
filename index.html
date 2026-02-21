@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SecureVault Explorer</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">🛡️</span>
+          <span class="brand__name">SecureVault</span>
+        </div>
+
+        <div class="topbar__actions">
+          <label class="search topbar__search" aria-label="Search vault">
+            <span class="search__icon" aria-hidden="true">⌕</span>
+            <input
+              id="globalSearch"
+              type="search"
+              placeholder="Search vault..."
+              autocomplete="off"
+            />
+          </label>
+
+          <button class="iconBtn" type="button" aria-label="Notifications">
+            🔔
+          </button>
+          <button class="iconBtn" type="button" aria-label="Settings">
+            ⚙️
+          </button>
+          <button class="avatar" type="button" aria-label="User menu">
+            <span aria-hidden="true">👤</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <!-- LEFT: Explorer -->
+        <aside class="panel panel--left" aria-label="File Explorer">
+          <div class="panel__header">
+            <div class="panel__title">FILE EXPLORER</div>
+            <label class="search" aria-label="Search files">
+              <span class="search__icon" aria-hidden="true">⌕</span>
+              <input
+                id="treeSearch"
+                type="search"
+                placeholder="Search vault..."
+                autocomplete="off"
+              />
+            </label>
+          </div>
+
+          <div class="panel__body">
+            <div
+              id="tree"
+              class="tree"
+              role="tree"
+              aria-label="Vault tree"
+              tabindex="0"
+            ></div>
+          </div>
+
+          <div class="panel__footer">
+            <span class="statusDot" aria-hidden="true"></span>
+            <span class="muted">System Operational</span>
+          </div>
+        </aside>
+
+        <!-- CENTER: Workspace -->
+        <section class="panel panel--center" aria-label="Workspace">
+          <div id="workspace" class="workspace"></div>
+        </section>
+
+        <!-- RIGHT: Inspector -->
+        <aside class="panel panel--right" aria-label="Properties Inspector">
+          <div class="panel__header">
+            <div class="panel__title">PROPERTIES INSPECTOR</div>
+          </div>
+          <div id="inspector" class="panel__body inspector"></div>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
