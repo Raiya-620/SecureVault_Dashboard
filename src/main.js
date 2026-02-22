@@ -1,128 +1,13 @@
 /**
  * SecureVault — Vanilla JS File Explorer
- * - Recursive tree rendering
+ * Assessment requirement: load folder tree from ./data.json (root)
+ * Features:
+ * - Recursive tree rendering (unlimited depth)
+ * - Expand/collapse folders
+ * - File selection + Properties Inspector
  * - Keyboard navigation (Up/Down/Left/Right/Enter)
- * - Search with auto-expand for matches
- * - Reusable render functions (component-like)
+ * - Search filters + auto-expands ancestor folders for matches
  */
-
-/** ---------------------------
- *  Sample data (replace with data.json later)
- *  Expected node shape:
- *  { id, type: 'folder'|'file', name, size?, owner?, encryption?, checksum?, created?, modified?, accessed?, children? }
- * -------------------------- */
-const DATA = {
-  id: "root",
-  type: "folder",
-  name: "Root",
-  children: [
-    {
-      id: "prod",
-      type: "folder",
-      name: "Production_Cluster_Alpha",
-      children: [
-        {
-          id: "secrets",
-          type: "folder",
-          name: "Config_Secrets",
-          children: [
-            mkFile("envkey", "env_encryption.key", "8 KB", {
-              encryption: "AES-256-GCM",
-              checksum: "sha256:7b9d...f021",
-            }),
-            mkFile("db", "db_access_v4.json", "3 KB", {
-              encryption: "None",
-              checksum: "sha256:91ac...c922",
-            }),
-          ],
-        },
-        {
-          id: "legacy",
-          type: "folder",
-          name: "Legacy_Backups",
-          children: [
-            mkFile("sql1", "prod_db_backup_2023_Q4.sql.enc", "4.28 GB", {
-              encryption: "AES-256-GCM",
-              checksum: "sha256:f3e9...a2b8",
-            }),
-          ],
-        },
-      ],
-    },
-    {
-      id: "audits",
-      type: "folder",
-      name: "Security_Audits_2024",
-      children: [
-        mkFile("log1", "audit_report_Q1.pdf", "12.4 MB", {
-          encryption: "AES-256-GCM",
-          checksum: "sha256:0c11...77a1",
-        }),
-      ],
-    },
-  ],
-};
-
-function mkFile(id, name, size, extra = {}) {
-  const now = new Date();
-  return {
-    id,
-    type: "file",
-    name,
-    size,
-    owner: extra.owner ?? "System",
-    encryption: extra.encryption ?? "AES-256-GCM",
-    checksum: extra.checksum ?? "sha256:—",
-    created: extra.created ?? isoDate(addDays(now, -120)),
-    modified: extra.modified ?? isoDate(addDays(now, -30)),
-    accessed: extra.accessed ?? isoDate(now),
-    activity: extra.activity ?? defaultActivity(),
-  };
-}
-
-function defaultActivity() {
-  return [
-    {
-      who: "Admin_Sara",
-      what: "viewed metadata",
-      when: "2 mins ago",
-      avatar: "👩🏽‍💼",
-    },
-    {
-      who: "System_Bot",
-      what: "performed integrity check",
-      when: "18 mins ago",
-      avatar: "🤖",
-    },
-    {
-      who: "Dev_Jake",
-      what: "modified security flags",
-      when: "1 hour ago",
-      avatar: "🧑🏽‍💻",
-    },
-  ];
-}
-
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-function isoDate(date) {
-  return new Date(date).toISOString().slice(0, 10);
-}
-
-/** ---------------------------
- *  State
- * -------------------------- */
-const state = {
-  data: DATA,
-  expanded: new Set(["root", "prod"]), // expanded folder ids
-  selectedId: null, // selected file id
-  focusedId: null, // focused visible node id (for keyboard)
-  query: "", // search query for tree
-  filteredVisibleIds: [], // cache visible ids after render
-};
 
 const els = {
   tree: document.getElementById("tree"),
@@ -132,14 +17,185 @@ const els = {
   globalSearch: document.getElementById("globalSearch"),
 };
 
+const state = {
+  data: null,                 // virtual root node
+  expanded: new Set(),         // expanded folder ids
+  selectedId: null,            // selected file id
+  focusedId: null,             // focused visible node id
+  query: "",                   // search query
+  filteredVisibleIds: [],      // visible ids after render (for keyboard nav)
+};
+
 /** ---------------------------
- *  Init
+ *  Boot (Fetch data.json)
  * -------------------------- */
-function init() {
-  // shared search inputs
+init();
+
+async function init() {
+  wireUI();
+
+  try {
+    const nodes = await fetchDataJson("./data.json");
+    const virtualRoot = buildVirtualRoot(nodes);
+
+    // Optional: enrich file nodes with defaults for the inspector
+    enrichNodesInPlace(virtualRoot);
+
+    state.data = virtualRoot;
+
+    // Expand virtual root by default so top-level nodes show
+    state.expanded.add(virtualRoot.id);
+
+    // Set initial focus to first visible node (virtual root)
+    state.focusedId = virtualRoot.id;
+
+    renderAll();
+  } catch (err) {
+    renderFatalError(err);
+  }
+}
+
+async function fetchDataJson(url) {
+  const res = await fetch(url, { cache: "no-store" });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load ${url} (HTTP ${res.status}). Ensure data.json is in the project root.`);
+  }
+
+  const data = await res.json();
+
+  if (!Array.isArray(data)) {
+    throw new Error(`Invalid data.json shape. Expected an array of nodes, got: ${typeof data}`);
+  }
+
+  validateTreeNodes(data);
+  return data;
+}
+
+function buildVirtualRoot(childrenArray) {
+  return {
+    id: "__root__",
+    name: "Vault",
+    type: "folder",
+    children: childrenArray,
+  };
+}
+
+/** ---------------------------
+ *  Validation
+ * -------------------------- */
+function validateTreeNodes(nodes) {
+  const ids = new Set();
+
+  const validateNode = (node) => {
+    if (!node || typeof node !== "object") {
+      throw new Error("Invalid node: each item must be an object.");
+    }
+
+    if (!node.id || typeof node.id !== "string") {
+      throw new Error("Invalid node: missing string 'id'.");
+    }
+    if (ids.has(node.id)) {
+      throw new Error(`Duplicate id detected: '${node.id}'. IDs must be unique.`);
+    }
+    ids.add(node.id);
+
+    if (!node.name || typeof node.name !== "string") {
+      throw new Error(`Invalid node '${node.id}': missing string 'name'.`);
+    }
+
+    if (node.type !== "folder" && node.type !== "file") {
+      throw new Error(`Invalid node '${node.id}': 'type' must be 'folder' or 'file'.`);
+    }
+
+    if (node.type === "folder") {
+      if ("children" in node && !Array.isArray(node.children)) {
+        throw new Error(`Invalid folder '${node.id}': 'children' must be an array.`);
+      }
+      (node.children || []).forEach(validateNode);
+    } else {
+      // file
+      if ("children" in node) {
+        throw new Error(`Invalid file '${node.id}': files must not have 'children'.`);
+      }
+      if ("size" in node && typeof node.size !== "string") {
+        throw new Error(`Invalid file '${node.id}': 'size' must be a string like '4.2MB'.`);
+      }
+    }
+  };
+
+  nodes.forEach(validateNode);
+}
+
+/** ---------------------------
+ *  Optional metadata enrichment
+ *  (Your JSON only contains size; inspector can show sensible defaults)
+ * -------------------------- */
+function enrichNodesInPlace(root) {
+  walk(root, (node, parents) => {
+    if (node.type === "file") {
+      node.owner ??= "System";
+      node.encryption ??= guessEncryption(node.name);
+      node.checksum ??= `sha256:${hashStub(node.id)}`;
+      node.created ??= "2024-01-12";
+      node.modified ??= "2024-02-24";
+      node.accessed ??= "Just now";
+      node.path ??= buildPath(parents, node.name);
+      node.activity ??= defaultActivity();
+      node.mime ??= guessMime(node.name);
+      node.permissions ??= "755 (Global)";
+      node.status ??= node.encryption === "None" ? "Unverified ⚠️" : "Verified";
+    } else {
+      node.path ??= buildPath(parents, node.name);
+    }
+  });
+}
+
+function buildPath(parents, name) {
+  const parts = parents.map((p) => p.name).filter(Boolean);
+  return `/${parts.join("/")}/${name}`.replaceAll("//", "/");
+}
+
+function guessEncryption(filename) {
+  return filename.endsWith(".enc") ? "AES-256-GCM" : "None";
+}
+
+function guessMime(filename) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".json")) return "application/json";
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+  if (lower.endsWith(".txt")) return "text/plain";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+function hashStub(str) {
+  // small non-crypto stub; just for UI display
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h.toString(16).padStart(8, "0") + "...";
+}
+
+function defaultActivity() {
+  return [
+    { who: "Admin_Sara", what: "viewed metadata", when: "2 mins ago", avatar: "👩🏽‍💼" },
+    { who: "System_Bot", what: "performed integrity check", when: "18 mins ago", avatar: "🤖" },
+    { who: "Dev_Jake", what: "modified security flags", when: "1 hour ago", avatar: "🧑🏽‍💻" },
+  ];
+}
+
+/** ---------------------------
+ *  UI Wiring
+ * -------------------------- */
+function wireUI() {
   const onSearch = (value) => {
     state.query = value.trim();
-    autoExpandForSearch();
+    if (state.data) autoExpandForSearch();
     renderAll();
   };
 
@@ -160,33 +216,25 @@ function init() {
     const node = findNodeById(state.data, nodeId);
     if (!node) return;
 
-    // clicking twisty toggles folder expand
     const clickedTwisty = e.target.closest("[data-action='toggle']");
+
     if (node.type === "folder" && clickedTwisty) {
       toggleExpand(node.id);
       return;
     }
 
-    // clicking folder label toggles (common UX)
     if (node.type === "folder") {
       toggleExpand(node.id);
       setFocus(node.id);
       return;
     }
 
-    // clicking file selects
     if (node.type === "file") {
       selectFile(node.id);
       setFocus(node.id);
     }
   });
-
-  // set initial focus
-  state.focusedId = "root";
-  renderAll();
 }
-
-init();
 
 /** ---------------------------
  *  Actions
@@ -194,7 +242,7 @@ init();
 function toggleExpand(folderId) {
   if (state.expanded.has(folderId)) state.expanded.delete(folderId);
   else state.expanded.add(folderId);
-  renderAll();
+  renderAll({ preserveScroll: true });
 }
 
 function selectFile(fileId) {
@@ -235,10 +283,7 @@ function onTreeKeyDown(e) {
     }
     case "ArrowRight": {
       e.preventDefault();
-      if (
-        currentNode?.type === "folder" &&
-        !state.expanded.has(currentNode.id)
-      ) {
+      if (currentNode?.type === "folder" && !state.expanded.has(currentNode.id)) {
         state.expanded.add(currentNode.id);
         renderAll({ preserveScroll: true });
       }
@@ -246,19 +291,13 @@ function onTreeKeyDown(e) {
     }
     case "ArrowLeft": {
       e.preventDefault();
-      if (
-        currentNode?.type === "folder" &&
-        state.expanded.has(currentNode.id)
-      ) {
+      if (currentNode?.type === "folder" && state.expanded.has(currentNode.id)) {
         state.expanded.delete(currentNode.id);
         renderAll({ preserveScroll: true });
       } else {
-        // move focus to parent if possible
         const parent = findParentOf(state.data, currentId);
-        if (parent) {
-          setFocus(parent.id);
-          scrollFocusedIntoView();
-        }
+        if (parent) setFocus(parent.id);
+        scrollFocusedIntoView();
       }
       break;
     }
@@ -274,15 +313,12 @@ function onTreeKeyDown(e) {
 }
 
 function scrollFocusedIntoView() {
-  const el = els.tree.querySelector(
-    `[data-node-id="${cssEscape(state.focusedId)}"]`,
-  );
+  const el = els.tree.querySelector(`[data-node-id="${cssEscape(state.focusedId)}"]`);
   if (!el) return;
   el.scrollIntoView({ block: "nearest" });
 }
 
 function cssEscape(value) {
-  // minimal escape for attribute selectors
   return String(value).replace(/"/g, '\\"');
 }
 
@@ -293,12 +329,9 @@ function autoExpandForSearch() {
   if (!state.query) return;
 
   const q = state.query.toLowerCase();
-  const matchedIds = new Set();
 
   walk(state.data, (node, parents) => {
     if (node.name.toLowerCase().includes(q)) {
-      matchedIds.add(node.id);
-      // expand all parents
       for (const p of parents) {
         if (p.type === "folder") state.expanded.add(p.id);
       }
@@ -310,21 +343,22 @@ function autoExpandForSearch() {
  *  Rendering
  * -------------------------- */
 function renderAll(options = {}) {
+  if (!state.data) return;
+
   const prevScroll = els.tree.scrollTop;
+
   renderTree();
   renderWorkspace();
   renderInspector();
 
-  if (options.preserveScroll) {
-    els.tree.scrollTop = prevScroll;
-  }
+  if (options.preserveScroll) els.tree.scrollTop = prevScroll;
 }
 
 function renderTree() {
   const q = state.query.toLowerCase();
   const visibleIds = [];
 
-  const treeHtml = Tree({
+  const html = Tree({
     node: state.data,
     level: 0,
     expanded: state.expanded,
@@ -334,49 +368,30 @@ function renderTree() {
     onVisible: (id) => visibleIds.push(id),
   });
 
-  els.tree.innerHTML = treeHtml;
+  els.tree.innerHTML = html;
   state.filteredVisibleIds = visibleIds;
 
-  // If focus is missing after filtering, move focus to first visible
+  // If focus falls out of visible set after filtering, focus first visible
   if (visibleIds.length && !visibleIds.includes(state.focusedId)) {
     state.focusedId = visibleIds[0];
-    renderTree(); // rerender once with updated focus
+    renderTree();
   }
 }
 
 function renderWorkspace() {
-  const selected = state.selectedId
-    ? findNodeById(state.data, state.selectedId)
-    : null;
-
-  if (!selected) {
-    els.workspace.innerHTML = EmptyWorkspace();
-    return;
-  }
-
-  els.workspace.innerHTML = FileWorkspace(selected);
+  const selected = state.selectedId ? findNodeById(state.data, state.selectedId) : null;
+  els.workspace.innerHTML = selected ? FileWorkspace(selected) : EmptyWorkspace();
 }
 
 function renderInspector() {
-  const selected = state.selectedId
-    ? findNodeById(state.data, state.selectedId)
-    : null;
+  const selected = state.selectedId ? findNodeById(state.data, state.selectedId) : null;
   els.inspector.innerHTML = Inspector(selected);
 }
 
 /** ---------------------------
- *  “Components” (reusable renderers)
+ *  “Components”
  * -------------------------- */
-function Tree({
-  node,
-  level,
-  expanded,
-  query,
-  selectedId,
-  focusedId,
-  onVisible,
-}) {
-  // Filter: show folders if they contain match in subtree OR themselves match; show files only if match (when query exists)
+function Tree({ node, level, expanded, query, selectedId, focusedId, onVisible }) {
   const visible = filterNodeForQuery(node, query);
   if (!visible) return "";
 
@@ -384,8 +399,7 @@ function Tree({
 
   const isFolder = node.type === "folder";
   const isExpanded = isFolder && expanded.has(node.id);
-  const hasChildren =
-    isFolder && Array.isArray(node.children) && node.children.length > 0;
+  const hasChildren = isFolder && Array.isArray(node.children) && node.children.length > 0;
 
   const twisty = isFolder
     ? `<span class="treeItem__twisty" data-action="toggle" aria-hidden="true">${hasChildren ? (isExpanded ? "▼" : "▶") : "•"}</span>`
@@ -425,16 +439,11 @@ function Tree({
         selectedId,
         focusedId,
         onVisible,
-      }),
+      })
     )
     .join("");
 
-  return `
-    ${item}
-    <div class="treeChildren" role="group">
-      ${childrenHtml}
-    </div>
-  `;
+  return `${item}<div class="treeChildren" role="group">${childrenHtml}</div>`;
 }
 
 function EmptyWorkspace() {
@@ -451,16 +460,22 @@ function EmptyWorkspace() {
   `;
 }
 
-function FileWorkspace(file) {
+function FileWorkspace(node) {
+  if (node.type !== "file") {
+    return `
+      <div class="card" style="height:100%; display:grid; place-items:center;">
+        <div style="text-align:center; max-width:520px; padding:22px;">
+          <div style="font-size:44px; opacity:.9;">📁</div>
+          <h2 style="margin:10px 0 6px 0;">Folder Selected</h2>
+          <p class="muted" style="margin:0;">Select a file to view detailed inspection and actions.</p>
+        </div>
+      </div>
+    `;
+  }
+
   const badges = [
-    Badge(
-      file.encryption && file.encryption !== "None"
-        ? "Encrypted"
-        : "Not Encrypted",
-      file.encryption !== "None" ? "accent" : "",
-    ),
-    Badge("Verified Signature", "good"),
-    Badge("Production Grade", "warn"),
+    Badge(node.encryption !== "None" ? "Encrypted" : "Not Encrypted", node.encryption !== "None" ? "accent" : ""),
+    Badge(node.status || "Verified", node.encryption !== "None" ? "good" : "warn"),
   ].join("");
 
   return `
@@ -468,7 +483,7 @@ function FileWorkspace(file) {
       <div class="fileHeader">
         <div class="fileIcon" aria-hidden="true">🗄️</div>
         <div class="fileTitle">
-          <h1>${escapeHtml(file.name)}</h1>
+          <h1>${escapeHtml(node.name)}</h1>
           <div class="badges">${badges}</div>
         </div>
       </div>
@@ -482,22 +497,22 @@ function FileWorkspace(file) {
     </div>
 
     <div class="card kv">
-      <div class="kv__k">FILE SIZE</div><div class="kv__v">${escapeHtml(file.size || "—")}</div>
-      <div class="kv__k">MIME TYPE</div><div class="kv__v">application/octet-stream</div>
-      <div class="kv__k">SECURITY OWNER</div><div class="kv__v">${escapeHtml(file.owner || "System")}</div>
+      <div class="kv__k">FILE SIZE</div><div class="kv__v">${escapeHtml(node.size || "—")}</div>
+      <div class="kv__k">MIME TYPE</div><div class="kv__v">${escapeHtml(node.mime || "application/octet-stream")}</div>
+      <div class="kv__k">SECURITY OWNER</div><div class="kv__v">${escapeHtml(node.owner || "System")}</div>
+      <div class="kv__k">LOCATION PATH</div><div class="kv__v">${escapeHtml(node.path || "—")}</div>
     </div>
 
     <div class="lockPreview">
       <div class="lockPreview__inner">
         <div class="lockPreview__icon" aria-hidden="true">🔒</div>
-        <div class="lockPreview__title">Encrypted Content Shielded</div>
+        <div class="lockPreview__title">Content Access Restricted</div>
         <div class="lockPreview__desc">
-          Direct preview is disabled for encrypted assets to preserve integrity and compliance.
-          Verify checksum or request authorized access for local inspection.
+          This asset is protected. Preview may be disabled depending on encryption and compliance policy.
         </div>
         <div class="lockPreview__buttons">
           <button class="btn" type="button">Verify Checksum</button>
-          <button class="btn btn--primary" type="button">Request Decryption Key</button>
+          <button class="btn btn--primary" type="button">Request Approval</button>
         </div>
       </div>
     </div>
@@ -507,107 +522,70 @@ function FileWorkspace(file) {
 function Inspector(selected) {
   if (!selected) {
     return `
-      ${Section(
-        "GENERAL INFO",
-        KV([
-          ["Name", "No selection"],
-          ["Type", "—"],
-          ["Size", "—"],
-          ["Owner", "—"],
-        ]),
-      )}
-      ${Section(
-        "SECURITY METADATA",
-        KV([
-          ["Encryption", "—"],
-          ["Status", "—"],
-          ["Checksum", "—"],
-          ["Permissions", "—"],
-        ]),
-      )}
-      ${Section(
-        "TIMESTAMPS",
-        KV([
-          ["Created", "—"],
-          ["Modified", "—"],
-          ["Accessed", "—"],
-        ]),
-      )}
+      ${Section("GENERAL INFO", KV([
+        ["Name", "No selection"],
+        ["Type", "—"],
+        ["Size", "—"],
+        ["Owner", "—"],
+      ]))}
+      ${Section("SECURITY METADATA", KV([
+        ["Encryption", "—"],
+        ["Status", "—"],
+        ["Checksum", "—"],
+        ["Permissions", "—"],
+      ]))}
+      ${Section("TIMESTAMPS", KV([
+        ["Created", "—"],
+        ["Modified", "—"],
+        ["Accessed", "—"],
+      ]))}
       ${Section("RECENT ACTIVITY", `<div class="muted">No activity yet.</div>`)}
     `;
   }
 
   const isFile = selected.type === "file";
-  const baseKv = [
-    ["Name", selected.name],
-    ["Type", isFile ? "FILE" : "FOLDER"],
-    ["Size", isFile ? selected.size || "—" : "N/A"],
-    ["Owner", isFile ? selected.owner || "System" : "System"],
-  ];
-
-  const secKv = [
-    ["Encryption", isFile ? selected.encryption || "None" : "None"],
-    [
-      "Status",
-      isFile
-        ? selected.encryption !== "None"
-          ? "Verified"
-          : "Unverified ⚠️"
-        : "Available",
-    ],
-    ["Checksum", isFile ? selected.checksum || "—" : "Not Calculated"],
-    ["Permissions", isFile ? "755 (Global)" : "—"],
-  ];
-
-  const timeKv = [
-    ["Created", isFile ? selected.created || "—" : "—"],
-    ["Modified", isFile ? selected.modified || "—" : "—"],
-    ["Accessed", isFile ? selected.accessed || "—" : "—"],
-  ];
-
-  const activityHtml = isFile
-    ? ActivityList(selected.activity || [])
-    : `<div class="muted">Select a file to view activity.</div>`;
 
   return `
-    ${Section("GENERAL INFO", KV(baseKv))}
-    ${Section("SECURITY METADATA", KV(secKv))}
-    ${Section("TIMESTAMPS", KV(timeKv))}
-    ${Section("RECENT ACTIVITY", activityHtml + `<div style="margin-top:10px;"><button class="btn" type="button">View Full Audit Log</button></div>`)}
+    ${Section("GENERAL INFO", KV([
+      ["Name", selected.name],
+      ["Type", isFile ? "FILE" : "FOLDER"],
+      ["Size", isFile ? (selected.size || "—") : "N/A"],
+      ["Owner", isFile ? (selected.owner || "System") : "System"],
+      ["Path", selected.path || "—"],
+    ]))}
+    ${Section("SECURITY METADATA", KV([
+      ["Encryption", isFile ? (selected.encryption || "None") : "None"],
+      ["Status", isFile ? (selected.status || "—") : "Available"],
+      ["Checksum", isFile ? (selected.checksum || "—") : "Not Calculated"],
+      ["Permissions", isFile ? (selected.permissions || "—") : "—"],
+    ]))}
+    ${Section("TIMESTAMPS", KV([
+      ["Created", isFile ? (selected.created || "—") : "—"],
+      ["Modified", isFile ? (selected.modified || "—") : "—"],
+      ["Accessed", isFile ? (selected.accessed || "—") : "—"],
+    ]))}
+    ${Section("RECENT ACTIVITY", isFile ? ActivityList(selected.activity || []) : `<div class="muted">Select a file to view activity.</div>`)}
   `;
 }
 
 function Section(title, bodyHtml) {
-  return `
-    <div class="section">
-      <h3>${escapeHtml(title)}</h3>
-      ${bodyHtml}
-    </div>
-  `;
+  return `<div class="section"><h3>${escapeHtml(title)}</h3>${bodyHtml}</div>`;
 }
 
 function KV(rows) {
-  return `
-    <div class="kv">
-      ${rows
-        .map(
-          ([k, v]) =>
-            `<div class="kv__k">${escapeHtml(k)}</div><div class="kv__v">${escapeHtml(String(v))}</div>`,
-        )
-        .join("")}
-    </div>
-  `;
+  return `<div class="kv">${
+    rows.map(([k, v]) =>
+      `<div class="kv__k">${escapeHtml(k)}</div><div class="kv__v">${escapeHtml(String(v))}</div>`
+    ).join("")
+  }</div>`;
 }
 
 function Badge(text, variant) {
   const cls =
-    variant === "accent"
-      ? "badge badge--accent"
-      : variant === "good"
-        ? "badge badge--good"
-        : variant === "warn"
-          ? "badge badge--warn"
-          : "badge";
+    variant === "accent" ? "badge badge--accent"
+    : variant === "good" ? "badge badge--good"
+    : variant === "warn" ? "badge badge--warn"
+    : "badge";
 
   return `<span class="${cls}">${escapeHtml(text)}</span>`;
 }
@@ -617,44 +595,33 @@ function ActivityList(items) {
 
   return `
     <div class="activity">
-      ${items
-        .map(
-          (it) => `
-          <div class="activityItem">
-            <div class="activityAvatar" aria-hidden="true">${escapeHtml(it.avatar || "👤")}</div>
-            <div class="activityMeta">
-              <div class="who">${escapeHtml(it.who)}</div>
-              <div class="what">${escapeHtml(it.what)}</div>
-              <div class="when">${escapeHtml(it.when)}</div>
-            </div>
+      ${items.map((it) => `
+        <div class="activityItem">
+          <div class="activityAvatar" aria-hidden="true">${escapeHtml(it.avatar || "👤")}</div>
+          <div class="activityMeta">
+            <div class="who">${escapeHtml(it.who)}</div>
+            <div class="what">${escapeHtml(it.what)}</div>
+            <div class="when">${escapeHtml(it.when)}</div>
           </div>
-        `,
-        )
-        .join("")}
+        </div>
+      `).join("")}
     </div>
   `;
 }
 
 /** ---------------------------
- *  Helpers: tree walking, find, filter
+ *  Helpers
  * -------------------------- */
 function findNodeById(root, id) {
   let found = null;
-  walk(root, (node) => {
-    if (node.id === id) found = node;
-  });
+  walk(root, (node) => { if (node.id === id) found = node; });
   return found;
 }
 
 function findParentOf(root, childId) {
   let parent = null;
   walk(root, (node) => {
-    if (
-      node.type === "folder" &&
-      node.children?.some((c) => c.id === childId)
-    ) {
-      parent = node;
-    }
+    if (node.type === "folder" && node.children?.some((c) => c.id === childId)) parent = node;
   });
   return parent;
 }
@@ -662,17 +629,15 @@ function findParentOf(root, childId) {
 function walk(root, cb, parents = []) {
   cb(root, parents);
   if (root.type === "folder" && Array.isArray(root.children)) {
-    for (const child of root.children) {
-      walk(child, cb, [...parents, root]);
-    }
+    for (const child of root.children) walk(child, cb, [...parents, root]);
   }
 }
 
 /**
- * filterNodeForQuery:
- * - if no query => show everything
- * - if folder => show if it matches OR any child matches
- * - if file => show if it matches
+ * Filtering rules:
+ * - no query => show everything
+ * - folder => show if it matches OR any child matches
+ * - file => show only if it matches
  */
 function filterNodeForQuery(node, query) {
   if (!query) return true;
@@ -680,10 +645,7 @@ function filterNodeForQuery(node, query) {
   const selfMatch = node.name.toLowerCase().includes(query);
   if (node.type === "file") return selfMatch;
 
-  // folder: check subtree
-  const childMatch = (node.children || []).some((c) =>
-    filterNodeForQuery(c, query),
-  );
+  const childMatch = (node.children || []).some((c) => filterNodeForQuery(c, query));
   return selfMatch || childMatch;
 }
 
@@ -708,4 +670,17 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function renderFatalError(err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  els.workspace.innerHTML = `
+    <div class="card" style="padding:18px;">
+      <h2 style="margin:0 0 8px 0;">Failed to load data.json</h2>
+      <p class="muted" style="margin:0 0 10px 0;">${escapeHtml(msg)}</p>
+      <p class="muted" style="margin:0;">Tip: If you're using VS Code Live Server, keep <code>data.json</code> in the same folder as <code>index.html</code>.</p>
+    </div>
+  `;
+  els.inspector.innerHTML = "";
+  els.tree.innerHTML = "";
 }
