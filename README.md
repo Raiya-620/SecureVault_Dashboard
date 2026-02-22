@@ -152,21 +152,11 @@ Because the project uses `fetch()`, it must be run using a local server.
 
 ---
 
-### Option 2 — Python
+### Option 2 — Github Pages
 
-```bash
-python -m http.server
-```
+```Link: https://raiya-620.github.io/SecureVault_Dashboard/```
 
----
 
-### Option 3 — Node
-
-```bash
-npx serve
-```
-
----
 
 ## Assessment Requirements Covered
 
