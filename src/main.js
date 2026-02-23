@@ -30,20 +30,20 @@ const els = {
 // App State
 // -----------------------------
 const state = {
-  data: null,               // Virtual root node
-  expanded: new Set(),      // Expanded folder ids
+  data: null, // Virtual root node
+  expanded: new Set(), // Expanded folder ids
 
   // Selection + modes
-  mode: "empty",            // 'empty' | 'preview' | 'details'
-  previewId: null,          // currently previewed file id
-  selectedId: null,         // file selected for details
-  focusedId: null,          // keyboard focus id
+  mode: "empty", // 'empty' | 'preview' | 'details'
+  previewId: null, // currently previewed file id
+  selectedId: null, // file selected for details
+  focusedId: null, // keyboard focus id
 
   // UI helpers
   query: "",
-  visibleIds: [],           // visible node ids after rendering
-  openMenuForId: null,      // file id whose action menu is open
-  deleteTargetId: null,     // file id pending deletion
+  visibleIds: [], // visible node ids after rendering
+  openMenuForId: null, // file id whose action menu is open
+  deleteTargetId: null, // file id pending deletion
 };
 
 // -----------------------------
@@ -62,7 +62,7 @@ async function init() {
     enrichNodesInPlace(root);
 
     state.data = root;
-    state.expanded.add(root.id);   // expand the root so top-level shows
+    state.expanded.add(root.id); // expand the root so top-level shows
     state.focusedId = root.id;
 
     renderAll();
@@ -78,7 +78,7 @@ async function fetchDataJson(url) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(
-      `Failed to load ${url} (HTTP ${res.status}). Make sure data.json is in the project root and you are using a local server.`
+      `Failed to load ${url} (HTTP ${res.status}). Make sure data.json is in the project root and you are using a local server.`,
     );
   }
 
@@ -121,21 +121,29 @@ function validateTreeNodes(nodes) {
     }
 
     if (node.type !== "folder" && node.type !== "file") {
-      throw new Error(`Invalid node '${node.id}': type must be 'folder' or 'file'.`);
+      throw new Error(
+        `Invalid node '${node.id}': type must be 'folder' or 'file'.`,
+      );
     }
 
     if (node.type === "folder") {
       if ("children" in node && !Array.isArray(node.children)) {
-        throw new Error(`Invalid folder '${node.id}': children must be an array.`);
+        throw new Error(
+          `Invalid folder '${node.id}': children must be an array.`,
+        );
       }
       (node.children || []).forEach(validateNode);
     } else {
       // file
       if ("children" in node) {
-        throw new Error(`Invalid file '${node.id}': files must not have 'children'.`);
+        throw new Error(
+          `Invalid file '${node.id}': files must not have 'children'.`,
+        );
       }
       if ("size" in node && typeof node.size !== "string") {
-        throw new Error(`Invalid file '${node.id}': size must be a string, e.g. '4.2MB'.`);
+        throw new Error(
+          `Invalid file '${node.id}': size must be a string, e.g. '4.2MB'.`,
+        );
       }
     }
   }
@@ -187,10 +195,30 @@ function guessMime(filename) {
 
 function defaultActivity() {
   return [
-    { who: "Admin_Sara", what: "viewed metadata", when: "2 mins ago", avatar: "👩🏽‍💼" },
-    { who: "System_Bot", what: "performed integrity check", when: "15 mins ago", avatar: "🤖" },
-    { who: "Dev_Jake", what: "modified security flags", when: "1 hour ago", avatar: "🧑🏽‍💻" },
-    { who: "Admin_Sara", what: "unlocked directory", when: "3 hours ago", avatar: "👩🏽‍💼" },
+    {
+      who: "Admin_Sara",
+      what: "viewed metadata",
+      when: "2 mins ago",
+      avatar: "👩🏽‍💼",
+    },
+    {
+      who: "System_Bot",
+      what: "performed integrity check",
+      when: "15 mins ago",
+      avatar: "🤖",
+    },
+    {
+      who: "Dev_Jake",
+      what: "modified security flags",
+      when: "1 hour ago",
+      avatar: "🧑🏽‍💻",
+    },
+    {
+      who: "Admin_Sara",
+      what: "unlocked directory",
+      when: "3 hours ago",
+      avatar: "👩🏽‍💼",
+    },
   ];
 }
 
@@ -388,7 +416,10 @@ function onTreeKeyDown(e) {
     }
     case "ArrowRight": {
       e.preventDefault();
-      if (currentNode?.type === "folder" && !state.expanded.has(currentNode.id)) {
+      if (
+        currentNode?.type === "folder" &&
+        !state.expanded.has(currentNode.id)
+      ) {
         state.expanded.add(currentNode.id);
         renderAll({ preserveTreeScroll: true });
       }
@@ -396,7 +427,10 @@ function onTreeKeyDown(e) {
     }
     case "ArrowLeft": {
       e.preventDefault();
-      if (currentNode?.type === "folder" && state.expanded.has(currentNode.id)) {
+      if (
+        currentNode?.type === "folder" &&
+        state.expanded.has(currentNode.id)
+      ) {
         state.expanded.delete(currentNode.id);
         renderAll({ preserveTreeScroll: true });
       } else {
@@ -429,7 +463,9 @@ function onTreeKeyDown(e) {
 }
 
 function scrollFocusedIntoView() {
-  const el = els.tree.querySelector(`[data-node-id="${cssEscape(state.focusedId)}"]`);
+  const el = els.tree.querySelector(
+    `[data-node-id="${cssEscape(state.focusedId)}"]`,
+  );
   if (el) el.scrollIntoView({ block: "nearest" });
 }
 
@@ -516,7 +552,9 @@ function renderWorkspace() {
 
 function renderInspector() {
   // Inspector only shows details when a file is selected via "View Details"
-  const node = state.selectedId ? findNodeById(state.data, state.selectedId) : null;
+  const node = state.selectedId
+    ? findNodeById(state.data, state.selectedId)
+    : null;
   els.inspector.innerHTML = Inspector(node);
 }
 
@@ -530,7 +568,8 @@ function Tree({ node, level, query, onVisible }) {
 
   const isFolder = node.type === "folder";
   const isExpanded = isFolder && state.expanded.has(node.id);
-  const hasChildren = isFolder && Array.isArray(node.children) && node.children.length > 0;
+  const hasChildren =
+    isFolder && Array.isArray(node.children) && node.children.length > 0;
 
   const isSelected = node.id === state.selectedId;
   const isFocused = node.id === state.focusedId;
@@ -543,8 +582,9 @@ function Tree({ node, level, query, onVisible }) {
 
   const icon = isFolder ? "📁" : "📄";
 
-  const actions = node.type === "file"
-    ? `
+  const actions =
+    node.type === "file"
+      ? `
       <div class="treeItem__actions">
         <button
           class="treeActionBtn"
@@ -556,7 +596,7 @@ function Tree({ node, level, query, onVisible }) {
       </div>
       ${FileMenu(node)}
     `
-    : "";
+      : "";
 
   const item = `
     <div
@@ -642,8 +682,9 @@ function PreviewWorkspace(node) {
 
   const kind = previewKind(node);
 
-  const previewHtml = kind === "image"
-    ? `
+  const previewHtml =
+    kind === "image"
+      ? `
       <div class="previewImageMock" aria-label="Image preview (mock)">
         <div style="text-align:center; padding:18px;">
           <div style="font-size:44px;">🖼️</div>
@@ -655,7 +696,7 @@ function PreviewWorkspace(node) {
         </div>
       </div>
     `
-    : `
+      : `
       <div class="previewTextMock" aria-label="Text preview (generated)">
         <pre>${escapeHtml(generateTextPreview(node))}</pre>
       </div>
@@ -695,7 +736,10 @@ function DetailsWorkspace(node) {
   }
 
   const badges = [
-    Badge(node.encryption !== "None" ? "AES-256 Encrypted" : "No Encryption", node.encryption !== "None" ? "accent" : ""),
+    Badge(
+      node.encryption !== "None" ? "AES-256 Encrypted" : "No Encryption",
+      node.encryption !== "None" ? "accent" : "",
+    ),
     Badge("Verified Signature", "good"),
     Badge("Production Grade", "warn"),
   ].join("");
@@ -703,7 +747,7 @@ function DetailsWorkspace(node) {
   return `
     <div class="hero">
       <div class="fileHeader">
-        <div class="fileIcon" aria-hidden="true">🗄️</div>
+        
         <div class="fileTitle">
           <h1>${escapeHtml(node.name)}</h1>
           <div class="badges">${badges}</div>
@@ -711,8 +755,8 @@ function DetailsWorkspace(node) {
       </div>
 
       <div class="actions">
-        <button class="btn btn--primary" type="button">⬇️ <span>Download File</span></button>
-        <button class="btn btn--ghost" type="button" aria-label="More actions">⋯</button>
+        <button class="btn btn--primary" type="button"><span>Download File</span></button>
+        
       </div>
     </div>
 
@@ -730,10 +774,7 @@ function DetailsWorkspace(node) {
         <div class="lockPreview__desc">
           In a real system, preview would be controlled by file type, permissions, and encryption policy.
         </div>
-        <div class="lockPreview__buttons">
-          <button class="btn" type="button">Verify Checksum</button>
-          <button class="btn btn--primary" type="button">Request Approval</button>
-        </div>
+        
       </div>
     </div>
   `;
@@ -742,62 +783,81 @@ function DetailsWorkspace(node) {
 function Inspector(node) {
   if (!node || node.type !== "file") {
     return `
-      ${Section("GENERAL INFO", KV([
-        ["Name", "No selection"],
-        ["Type", "—"],
-        ["Size", "—"],
-        ["Owner", "—"],
-      ]))}
+      ${Section(
+        "GENERAL INFO",
+        KV([
+          ["Name", "No selection"],
+          ["Type", "—"],
+          ["Size", "—"],
+          ["Owner", "—"],
+        ]),
+      )}
 
-      ${Section("SECURITY METADATA", KV([
-        ["Encryption", "—"],
-        ["Status", "—"],
-        ["Checksum", "—"],
-        ["Permissions", "—"],
-      ]))}
+      ${Section(
+        "SECURITY METADATA",
+        KV([
+          ["Encryption", "—"],
+          ["Status", "—"],
+          ["Checksum", "—"],
+          ["Permissions", "—"],
+        ]),
+      )}
 
-      ${Section("TIMESTAMPS", KV([
-        ["Created", "—"],
-        ["Modified", "—"],
-        ["Accessed", "—"],
-      ]))}
+      ${Section(
+        "TIMESTAMPS",
+        KV([
+          ["Created", "—"],
+          ["Modified", "—"],
+          ["Accessed", "—"],
+        ]),
+      )}
 
       ${Section("RECENT ACTIVITY", `<div class="muted">No activity yet.</div>`)}
     `;
   }
 
   return `
-    ${Section("GENERAL INFO", KV([
-      ["Logical Name", node.name],
-      ["System File Type", node.mime || "application/octet-stream"],
-      ["Total Payload Size", node.size || "—"],
-      ["Location Path", node.path || "—"],
-      ["Owner Identity", node.owner || "System"],
-    ]))}
+    ${Section(
+      "GENERAL INFO",
+      KV([
+        ["Logical Name", node.name],
+        ["System File Type", node.mime || "application/octet-stream"],
+        ["Total Payload Size", node.size || "—"],
+        ["Location Path", node.path || "—"],
+        ["Owner Identity", node.owner || "System"],
+      ]),
+    )}
 
-    ${Section("SECURITY METADATA", KV([
-      ["Access Permissions", "Role-Based"],
-      ["Encryption Method", node.encryption || "None"],
-      ["SHA-256 Checksum", node.checksum || "—"],
-      ["Verification Status", node.status || "—"],
-    ]))}
+    ${Section(
+      "SECURITY METADATA",
+      KV([
+        ["Access Permissions", "Role-Based"],
+        ["Encryption Method", node.encryption || "None"],
+        ["SHA-256 Checksum", node.checksum || "—"],
+        ["Verification Status", node.status || "—"],
+      ]),
+    )}
 
-    ${Section("TIMESTAMPS", KV([
-      ["Created", node.created || "—"],
-      ["Modified", node.modified || "—"],
-      ["Accessed", node.accessed || "—"],
-    ]))}
+    ${Section(
+      "TIMESTAMPS",
+      KV([
+        ["Created", node.created || "—"],
+        ["Modified", node.modified || "—"],
+        ["Accessed", node.accessed || "—"],
+      ]),
+    )}
 
     ${Section("RECENT ACTIVITY", ActivityList(node.activity || []))}
   `;
 }
 
 function WorkspaceWithModal() {
-  const base = (state.mode === "details" && state.selectedId)
-    ? DetailsWorkspace(findNodeById(state.data, state.selectedId))
-    : (state.mode === "preview" && state.previewId)
-      ? PreviewWorkspace(findNodeById(state.data, state.previewId))
-      : EmptyWorkspace();
+  const base =
+    state.mode === "details" && state.selectedId
+      ? DetailsWorkspace(findNodeById(state.data, state.selectedId))
+      : state.mode === "preview" && state.previewId
+        ? PreviewWorkspace(findNodeById(state.data, state.previewId))
+        : EmptyWorkspace();
 
   return `${base}${DeleteModal()}`;
 }
@@ -834,7 +894,10 @@ function KV(rows) {
   return `
     <div class="kv">
       ${rows
-        .map(([k, v]) => `<div class="kv__k">${escapeHtml(k)}</div><div class="kv__v">${escapeHtml(String(v))}</div>`)
+        .map(
+          ([k, v]) =>
+            `<div class="kv__k">${escapeHtml(k)}</div><div class="kv__v">${escapeHtml(String(v))}</div>`,
+        )
         .join("")}
     </div>
   `;
@@ -842,10 +905,13 @@ function KV(rows) {
 
 function Badge(text, variant) {
   const cls =
-    variant === "accent" ? "badge badge--accent"
-    : variant === "good" ? "badge badge--good"
-    : variant === "warn" ? "badge badge--warn"
-    : "badge";
+    variant === "accent"
+      ? "badge badge--accent"
+      : variant === "good"
+        ? "badge badge--good"
+        : variant === "warn"
+          ? "badge badge--warn"
+          : "badge";
 
   return `<span class="${cls}">${escapeHtml(text)}</span>`;
 }
@@ -866,7 +932,7 @@ function ActivityList(items) {
               <div class="when">${escapeHtml(it.when)}</div>
             </div>
           </div>
-        `
+        `,
         )
         .join("")}
     </div>
@@ -893,7 +959,8 @@ function isPreviewable(node) {
 
 function previewKind(node) {
   const ext = getExt(node.name);
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)) return "image";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext))
+    return "image";
   if (["txt", "log", "md", "json", "yaml", "yml"].includes(ext)) return "text";
   return "none";
 }
@@ -930,7 +997,10 @@ function findNodeById(root, id) {
 function findParentOf(root, childId) {
   let parent = null;
   walk(root, (node) => {
-    if (node.type === "folder" && node.children?.some((c) => c.id === childId)) {
+    if (
+      node.type === "folder" &&
+      node.children?.some((c) => c.id === childId)
+    ) {
       parent = node;
     }
   });
@@ -952,7 +1022,9 @@ function filterNodeForQuery(node, query) {
   const selfMatch = node.name.toLowerCase().includes(query);
   if (node.type === "file") return selfMatch;
 
-  const childMatch = (node.children || []).some((c) => filterNodeForQuery(c, query));
+  const childMatch = (node.children || []).some((c) =>
+    filterNodeForQuery(c, query),
+  );
   return selfMatch || childMatch;
 }
 
