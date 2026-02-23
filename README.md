@@ -65,8 +65,8 @@ This ensures stability and prevents runtime errors.
 project-root/
 │
 ├── index.html
-├── styles.css
-├── app.js
+├── styles/main.css
+├── src/main.js
 ├── data.json
 └── README.md
 ```
@@ -76,8 +76,8 @@ project-root/
 | File       | Description           |
 | ---------- | --------------------- |
 | index.html | Application layout    |
-| styles.css | UI styling            |
-| app.js     | Application logic     |
+| main.css | UI styling            |
+| main.js     | Application logic     |
 | data.json  | File system data      |
 | README.md  | Project documentation |
 
@@ -157,6 +157,10 @@ Because the project uses `fetch()`, it must be run using a local server.
 ```Link: https://raiya-620.github.io/SecureVault_Dashboard/```
 
 
+## Design File
+```Link: https://www.figma.com/design/K50p82x4I4da6SGQkdnlYO/SecureVault-Dashboard---Design-Systems---UI?node-id=2-1565&t=ObgIUMZl3NZvwSyO-1```
+
+
 
 ## Assessment Requirements Covered
 
@@ -233,3 +237,4 @@ SecureVault File Explorer — Assessment Project
 ## License
 
 For educational use only.
+
