@@ -382,16 +382,16 @@ body {
   flex-wrap: wrap;
 }
 
-.kv {
+.preview_wrapper {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px 12px;
   font-size: 13px;
 }
-.kv__k {
+.preview_item {
   color: var(--muted);
 }
-.kv__v {
+.preview_value {
   color: var(--text);
   text-align: right;
 }
