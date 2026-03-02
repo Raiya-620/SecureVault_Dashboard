@@ -760,11 +760,11 @@ function DetailsWorkspace(node) {
       </div>
     </div>
 
-    <div class="card kv">
-      <div class="kv__k">FILE SIZE</div><div class="kv__v">${escapeHtml(node.size || "—")}</div>
-      <div class="kv__k">MIME TYPE</div><div class="kv__v">${escapeHtml(node.mime || "application/octet-stream")}</div>
-      <div class="kv__k">SECURITY OWNER</div><div class="kv__v">${escapeHtml(node.owner || "System")}</div>
-      <div class="kv__k">LOCATION PATH</div><div class="kv__v">${escapeHtml(node.path || "—")}</div>
+    <div class="card preview_wrapper">
+      <div class="preview_item">FILE SIZE</div><div class="preview_value">${escapeHtml(node.size || "—")}</div>
+      <div class="preview_item">MIME TYPE</div><div class="preview_value">${escapeHtml(node.mime || "application/octet-stream")}</div>
+      <div class="preview_item">SECURITY OWNER</div><div class="preview_value">${escapeHtml(node.owner || "System")}</div>
+      <div class="preview_item">LOCATION PATH</div><div class="preview_value">${escapeHtml(node.path || "—")}</div>
     </div>
 
     <div class="lockPreview">
